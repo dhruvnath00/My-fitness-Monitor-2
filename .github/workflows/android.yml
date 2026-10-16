@@ -1,0 +1,42 @@
+name: Build APK
+on:
+  push:
+    branches: [main, master]
+  workflow_dispatch:
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Unzip the project
+        run: |
+          set -e
+          ZIP="$(ls -1 *.zip 2>/dev/null | head -n 1)"
+          if [ -z "$ZIP" ]; then echo "No .zip file found in the repository. Upload MyFitnessMonitor-android.zip first."; exit 1; fi
+          echo "Using $ZIP"
+          mkdir -p "$RUNNER_TEMP/proj"
+          unzip -q "$ZIP" -d "$RUNNER_TEMP/proj"
+          SETTINGS="$(find "$RUNNER_TEMP/proj" -name settings.gradle.kts | head -n 1)"
+          if [ -z "$SETTINGS" ]; then echo "settings.gradle.kts not found inside the zip."; exit 1; fi
+          echo "PROJECT_DIR=$(dirname "$SETTINGS")" >> "$GITHUB_ENV"
+          ls -la "$(dirname "$SETTINGS")"
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 17
+
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: "8.9"
+
+      - name: Build debug APK
+        working-directory: ${{ env.PROJECT_DIR }}
+        run: gradle :app:assembleDebug --no-daemon
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: MyFitnessMonitor-debug-apk
+          path: ${{ env.PROJECT_DIR }}/app/build/outputs/apk/debug/app-debug.apk
+          if-no-files-found: error
